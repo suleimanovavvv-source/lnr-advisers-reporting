@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block title %}Отчет {{ date }}{% endblock %}
+{% block content %}
+<div class="eyebrow">Еженедельная отчетность · {{ municipality.name }}</div>
+<div class="page-head"><div><h1>Отчет за {{ date }}</h1><p class="muted">Срок сдачи: {{ due }}. По постановлению № 253/24 вознаграждение составляет 5 000 руб. за полностью отработанный месяц независимо от ставки и выплачивается только в одной организации. Сумма ставок советников должна совпадать с занятыми ставками организации.</p></div><a href="{{ url_for('admin_dashboard', date=date) if current_user.role == 'admin' else url_for('municipal_dashboard') }}">Назад</a></div>
+<form method="post" class="card" action="{{ url_for('municipal_report') if current_user.role == 'municipality' else url_for('municipal_report', municipality_id=municipality.id) }}">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="date" value="{{ date }}">
+{% for school in schools %}
+{% set row = rows.get(school.id, {}) %}
+<section class="organization"><h2>{{ school.name }} <small>{{ school.kind }}</small></h2>
+<div class="field-grid"><label>Штатных единиц<input name="staff_{{ school.id }}" type="number" min="0" max="100000" step="0.01" value="{{ row.get('staff_units', '0') }}" required></label><label>Занятых ставок<input name="occupied_{{ school.id }}" type="number" min="0" max="100000" step="0.01" value="{{ row.get('occupied_rates', '0') }}" required></label><label>Комментарий / причина вакансий<input name="comment_{{ school.id }}" maxlength="1000" value="{{ row.get('comment', '') }}"></label></div>
+<div id="advisors-{{ school.id }}" class="advisors">
+{% for person in advisors.get(school.id, []) %}
+<fieldset class="advisor"><legend>Советник</legend><button type="button" class="remove" onclick="this.closest('fieldset').remove()">Удалить</button>
+<div class="field-grid">
+<label>ФИО<input name="advisor_name_{{ school.id }}_{{ loop.index0 }}" value="{{ person.full_name }}" maxlength="200" required></label>
+<label>Статус<select name="status_{{ school.id }}_{{ loop.index0 }}"><option value="working" {% if person.status == 'working' %}selected{% endif %}>Работает</option><option value="leave" {% if person.status == 'leave' %}selected{% endif %}>Отпуск</option><option value="sick" {% if person.status == 'sick' %}selected{% endif %}>Больничный</option><option value="maternity" {% if person.status == 'maternity' %}selected{% endif %}>Декрет</option></select></label>
+<label>Занятость<select name="employment_{{ school.id }}_{{ loop.index0 }}"><option value="main" {% if person.employment == 'main' %}selected{% endif %}>Основное место</option><option value="parttime" {% if person.employment == 'parttime' %}selected{% endif %}>Совместительство</option></select></label>
+<label>Занятая ставка<input name="rate_{{ school.id }}_{{ loop.index0 }}" type="number" min="0.01" max="100000" step="0.01" value="{{ person.occupied_rate }}" required></label>
+<label>Месяц выплат<input name="month_{{ school.id }}_{{ loop.index0 }}" type="month" value="{{ person.payment_month }}" required></label>
+<label class="check"><input name="payment_org_{{ school.id }}_{{ loop.index0 }}" type="checkbox" value="1" {% if person.payment_org %}checked{% endif %}> Организация выплаты</label><label class="check"><input name="full_month_{{ school.id }}_{{ loop.index0 }}" type="checkbox" value="1" {% if person.full_month %}checked{% endif %}> Месяц отработан полностью</label>
+{% for field, label in [('reward','Вознаграждение по № 253/24'), ('insurance','Страховые отчисления'), ('average','Средний заработок с вознаграждения'), ('paid','Фактически выплачено советнику')] %}<label>{{ label }}, руб.<input name="{{ field }}_{{ school.id }}_{{ loop.index0 }}" type="number" min="0" max="100000" step="0.01" value="{{ '%.2f'|format((person.average_earnings if field == 'average' else person[field]) / 100) }}" required></label>{% endfor %}
+<label>Причина отсутствия выплат<input name="reason_{{ school.id }}_{{ loop.index0 }}" maxlength="500" value="{{ person.nonpayment_reason }}"></label></div></fieldset>
+{% endfor %}
+</div><button class="outline" type="button" onclick="addAdvisor({{ school.id }})">+ Добавить советника</button></section>
+{% else %}<p class="empty">Нет организаций. Попросите администратора заполнить справочник.</p>{% endfor %}
+{% if schools %}<label>Причина изменения штатных единиц относительно предыдущего отчета<input name="change_reason" maxlength="1000" placeholder="Если штат изменился с прошлой недели"></label><p class="hint">Фактически работающие = число советников со статусом «Работает». Повторная отправка сохраняет предыдущую версию в журнале изменений.</p><button class="primary" type="submit">{{ 'Сохранить исправления' if report else 'Отправить отчет' }}</button>{% endif %}
+</form>
+<script>
+const counters = {};
+function addAdvisor(id) {
+  const box = document.getElementById('advisors-' + id);
+  const index = counters[id] ?? (Math.max(-1, ...Array.from(box.querySelectorAll('input[name^="advisor_name_"]')).map(input => Number(input.name.split('_').pop()))) + 1);
+  counters[id] = index + 1;
+  const f = document.createElement('fieldset');
+  f.className = 'advisor';
+  const fields = [
+    ['advisor_name','ФИО','text','',true], ['status','Статус','select','working',true],
+    ['employment','Занятость','select','main',true], ['rate','Занятая ставка','number','1',true],
+    ['month','Месяц выплат','month','{{ month }}',true], ['payment_org','Организация выплаты','checkbox','1',false],
+    ['full_month','Месяц отработан полностью','checkbox','1',false],
+    ['reward','Вознаграждение по № 253/24, руб.','number','0',true], ['insurance','Страховые отчисления, руб.','number','0',true],
+    ['average','Средний заработок с вознаграждения, руб.','number','0',true],
+    ['paid','Фактически выплачено, руб.','number','0',true], ['reason','Причина отсутствия выплат','text','',false]
+  ];
+  const legend = document.createElement('legend'); legend.textContent = 'Советник'; f.append(legend);
+  const remove = document.createElement('button'); remove.type='button'; remove.className='remove'; remove.textContent='Удалить'; remove.onclick=()=>f.remove(); f.append(remove);
+  const grid = document.createElement('div'); grid.className='field-grid';
+  for (const [key,title,type,value,required] of fields) {
+    const label = document.createElement('label'); label.textContent=title;
+    let input;
+    if(type==='select') {
+      input=document.createElement('select');
+      const choices = key==='status' ? [['working','Работает'],['leave','Отпуск'],['sick','Больничный'],['maternity','Декрет']] : [['main','Основное место'],['parttime','Совместительство']];
+      for(const [v,text] of choices) { const option=document.createElement('option'); option.value=v; option.textContent=text; input.append(option); }
+    } else { input=document.createElement('input'); input.type=type; input.value=value; if(type==='number'){input.min=key==='rate'?'0.01':'0';input.max='100000';input.step='0.01';} if(type==='checkbox'){label.className='check';} }
+    input.name=key+'_'+id+'_'+index; input.required=required; label.append(input); grid.append(label);
+  }
+  f.append(grid); box.append(f);
+}
+</script>
+{% endblock %}

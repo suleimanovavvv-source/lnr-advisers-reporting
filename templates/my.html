@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block title %}Мои отчеты{% endblock %}
+{% block content %}
+<div class="eyebrow">Личный кабинет муниципалитета</div><div class="page-head"><div><h1>{{ municipality.name }}</h1><p class="muted">Текущая отчетная дата: {{ period }} · срок сдачи: {{ due }}. Ответственный: {{ current_user.full_name }}.</p></div><a class="primary" href="{{ url_for('municipal_report', date=period) }}">Заполнить отчет</a></div>
+<form class="filters card" method="get" action="{{ url_for('municipal_report') }}"><label for="report-date">Открыть другой отчетный день</label><input id="report-date" type="date" name="date" max="{{ today }}" required><button class="outline" type="submit">Открыть форму</button></form>
+{% if today > due and not history|selectattr('report_date', 'equalto', period)|list %}<div class="alert error">Срок сдачи отчета истек. Отправьте данные как можно скорее.</div>{% endif %}
+<section class="card"><h2>История отчетов</h2><div class="table-wrap"><table><thead><tr><th>Отчетная дата</th><th>Организаций</th><th>Штатных единиц</th><th>Работающих</th><th>Обновлен</th><th></th></tr></thead><tbody>{% for row in history %}<tr><td>{{ row.report_date }}</td><td>{{ row.organizations }}</td><td>{{ row.staff }}</td><td>{{ row.working }}</td><td>{{ row.updated_at[:16]|replace('T',' ') }}</td><td><a href="{{ url_for('municipal_report', date=row.report_date) }}">Открыть / исправить</a></td></tr>{% else %}<tr><td colspan="6" class="empty">Пока нет отчетов.</td></tr>{% endfor %}</tbody></table></div></section>
+{% endblock %}

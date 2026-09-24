@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Учет советников{% endblock %} · Отчетность ЛНР</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar"><div class="shell nav"><a class="brand" href="{{ url_for('home') }}"><span class="logo">С</span><span>Учет советников<br><small>Еженедельная отчетность</small></span></a>{% if current_user %}<nav aria-label="Основное меню">{% if current_user.role == 'admin' %}<a href="{{ url_for('admin_dashboard') }}">Сводка</a><a href="{{ url_for('directory') }}">Справочник</a>{% else %}<a href="{{ url_for('municipal_dashboard') }}">Мои отчеты</a>{% endif %}<form action="{{ url_for('logout') }}" method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" class="nav-button">Выйти</button></form></nav>{% endif %}</div></header>
+  <main class="shell">
+    {% with messages = get_flashed_messages(with_categories=true) %}{% for category, text in messages %}<div class="alert {{ category }}" role="status">{{ text }}</div>{% endfor %}{% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

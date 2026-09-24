@@ -1,0 +1,5 @@
+.secret-key
+reports.sqlite3
+reports.sqlite3-*
+__pycache__/
+.venv/
